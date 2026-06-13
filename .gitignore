@@ -24,6 +24,21 @@
 .DS_Store
 *.pem
 
+# local clickhouse data + large seed CSVs
+/.clickhouse/
+/data/*.csv
+# clickhouse server runtime artifacts (created relative to cwd)
+/access/
+/preprocessed_configs/
+/store/
+/metadata/
+/user_files/
+/format_schemas/
+/flags/
+/tmp/
+/status
+*.log
+
 # debug
 npm-debug.log*
 yarn-debug.log*
