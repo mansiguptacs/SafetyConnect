@@ -1,5 +1,6 @@
 import { inngest } from "./client";
 import { ingestRecalls } from "./ingest";
+import { runDefense } from "./orchestrate";
 
 // Placeholder function used to verify the Inngest dev server connection in Phase 0.
 export const helloWorld = inngest.createFunction(
@@ -12,4 +13,4 @@ export const helloWorld = inngest.createFunction(
   },
 );
 
-export const functions = [helloWorld, ingestRecalls];
+export const functions = [helloWorld, ingestRecalls, runDefense];

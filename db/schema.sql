@@ -98,6 +98,21 @@ ENGINE = AggregatingMergeTree
 ORDER BY (recall_number, severity, state);
 
 -- ---------------------------------------------------------------------------
+-- audit_log: grounded action trail (replaces the old cited.md file; ephemeral
+-- serverless filesystems can't persist a file). One row per processed recall.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS safetyconnect.audit_log
+(
+    recall_number String,
+    severity      String,
+    source_url    String,
+    summary       String,
+    ts            DateTime DEFAULT now()
+)
+ENGINE = MergeTree
+ORDER BY ts;
+
+-- ---------------------------------------------------------------------------
 -- mv_patient_matches: fires on every INSERT into fda_recalls. Joins the new
 -- recall block against the full patient_ehr table on NDC and writes every
 -- affected customer into patient_alerts. (An MV sees only the newly inserted
