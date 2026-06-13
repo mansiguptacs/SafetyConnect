@@ -1,7 +1,7 @@
 import { inngest } from "./client";
+import { ingestRecalls } from "./ingest";
 
 // Placeholder function used to verify the Inngest dev server connection in Phase 0.
-// Real ingestion + orchestration functions are added in Phases 2 and 4.
 export const helloWorld = inngest.createFunction(
   { id: "hello-world", triggers: [{ event: "test/hello" }] },
   async ({ event, step }) => {
@@ -12,4 +12,4 @@ export const helloWorld = inngest.createFunction(
   },
 );
 
-export const functions = [helloWorld];
+export const functions = [helloWorld, ingestRecalls];
