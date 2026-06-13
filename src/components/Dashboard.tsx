@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRealtime } from "inngest/react";
 import { runChannel, type StageName } from "@/inngest/channels";
 import { launchDefense, getRealtimeToken } from "@/app/actions";
 import type { GlobalStats, PharmacyLocation } from "@/lib/queries";
 import UsMap, { type MapPoint } from "./UsMap";
+import FeedbackLoop from "./FeedbackLoop";
 
 type Severity = "Lethal" | "Moderate" | "Minor";
 
@@ -15,6 +16,9 @@ const SEVERITY_ACCENT: Record<Severity, string> = {
   Minor: "#2563eb",
 };
 const NEUTRAL = "#475569";
+
+// Stable reference so useRealtime doesn't resubscribe on every render.
+const TOPICS: ("lifecycle" | "stage")[] = ["lifecycle", "stage"];
 
 const STAGES: { key: StageName; label: string }[] = [
   { key: "fda_alert", label: "FDA recall" },
@@ -57,10 +61,19 @@ export default function Dashboard({
       .map((l) => ({ lat: l.lat, lon: l.lon }));
   }, [locations]);
 
+  // Memoize the subscription inputs so a re-render (e.g. each incoming stage
+  // message) doesn't tear down and re-open the WebSocket mid-run — which would
+  // drop the stages published during the reconnect gap.
+  const channel = useMemo(() => runChannel(runId ?? "idle"), [runId]);
+  const token = useCallback(
+    () => getRealtimeToken(runId as string),
+    [runId],
+  );
+
   const { messages, connectionStatus } = useRealtime({
-    channel: runChannel(runId ?? "idle"),
-    topics: ["lifecycle", "stage"],
-    token: () => getRealtimeToken(runId as string),
+    channel,
+    topics: TOPICS,
+    token,
     enabled: Boolean(runId),
   });
 
@@ -144,7 +157,10 @@ export default function Dashboard({
       />
 
       {!runId ? (
-        <Intro />
+        <>
+          <Intro />
+          <FeedbackLoop />
+        </>
       ) : (
         <>
           {recalls.length > 1 && (
@@ -212,6 +228,10 @@ export default function Dashboard({
           </div>
 
           <PatientCard data={recall?.stages.card_rendered} />
+
+          {recall?.recallNumber && recall.stages.cohort_identified && (
+            <FeedbackLoop recallNumber={recall.recallNumber} />
+          )}
         </>
       )}
     </div>
@@ -532,24 +552,44 @@ function Metric({
 function DispatchCard({ data }: { data?: Record<string, unknown> }) {
   if (!data)
     return (
-      <Card title="Dispatch">
+      <Card title="Coordinated dispatch">
         <Waiting />
       </Card>
     );
   const d = data as {
     dispatched: number;
     channel: string;
+    pharmacies: number;
+    providers: number;
+    payers: number;
+    payerNames: string[];
     demoAlert: { sent: boolean; channel: string; reason?: string };
   };
   return (
-    <Card title="Dispatch">
-      <div className="flex items-baseline gap-2">
-        <span className="text-lg font-bold text-slate-900">
-          {fmt(d.dispatched)}
-        </span>
-        <span className="text-xs text-slate-500">alerts sent ({d.channel})</span>
+    <Card title="Coordinated dispatch">
+      <p className="mb-2 text-[11px] leading-snug text-slate-500">
+        Every affected patient&apos;s whole care network is notified — not just the
+        patient.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <NetMetric value={fmt(d.dispatched)} label="patients alerted" />
+        <NetMetric value={fmt(d.pharmacies)} label="pharmacies" />
+        <NetMetric value={fmt(d.providers ?? 0)} label="care providers" />
+        <NetMetric value={fmt(d.payers ?? 0)} label="insurers" />
       </div>
-      <div className="mt-1 text-[11px] text-slate-500">
+      {d.payerNames?.length ? (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {d.payerNames.map((p) => (
+            <span
+              key={p}
+              className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"
+            >
+              {p}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <div className="mt-2 text-[11px] text-slate-500">
         Live demo alert:{" "}
         {d.demoAlert?.sent ? (
           <span className="font-medium text-emerald-600">
@@ -562,6 +602,19 @@ function DispatchCard({ data }: { data?: Record<string, unknown> }) {
         )}
       </div>
     </Card>
+  );
+}
+
+function NetMetric({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="rounded-lg bg-slate-50 px-2.5 py-1.5">
+      <div className="text-base font-bold tabular-nums text-slate-900">
+        {value}
+      </div>
+      <div className="text-[10px] uppercase tracking-wide text-slate-400">
+        {label}
+      </div>
+    </div>
   );
 }
 

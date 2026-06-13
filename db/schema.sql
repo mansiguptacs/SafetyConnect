@@ -113,6 +113,51 @@ ENGINE = MergeTree
 ORDER BY ts;
 
 -- ---------------------------------------------------------------------------
+-- patient_feedback: first-person outcome reports gathered after the alert
+-- (the closing feedback loop). De-identified: patient_ref is a pseudonymous
+-- token, never a real identity. Grok triages symptom_severity + action.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS safetyconnect.patient_feedback
+(
+    feedback_id      String,
+    recall_number    String,
+    patient_ref      String,            -- pseudonymous (e.g. PT-AB12)
+    pharmacy_id      String,
+    state            String,
+    channel          String,            -- 'form' | 'voice'
+    still_taking     UInt8,
+    last_consumed    String,            -- freeform, e.g. "this morning"
+    dose_amount      String,            -- freeform, e.g. "2 tablets"
+    symptoms_text    String,
+    adverse          UInt8,
+    symptom_severity String,            -- None | Mild | Moderate | Severe
+    triage_action    String,            -- recommended next step (Grok)
+    triage_rationale String,
+    created_at       DateTime DEFAULT now()
+)
+ENGINE = MergeTree
+ORDER BY (recall_number, created_at);
+
+-- ---------------------------------------------------------------------------
+-- pharmacy_tasks: actions routed to pharmacies from patient feedback. Severe
+-- cases become 'urgent' (prioritize a primary-care visit); the rest 'routine'.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS safetyconnect.pharmacy_tasks
+(
+    task_id       String,
+    recall_number String,
+    pharmacy_id   String,
+    patient_ref   String,
+    state         String,
+    priority      String,               -- urgent | routine
+    reason        String,
+    status        String DEFAULT 'open',
+    created_at    DateTime DEFAULT now()
+)
+ENGINE = MergeTree
+ORDER BY (recall_number, created_at);
+
+-- ---------------------------------------------------------------------------
 -- mv_patient_matches: fires on every INSERT into fda_recalls. Joins the new
 -- recall block against the full patient_ehr table on NDC and writes every
 -- affected customer into patient_alerts. (An MV sees only the newly inserted

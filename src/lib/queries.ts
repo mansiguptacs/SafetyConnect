@@ -214,6 +214,227 @@ export async function pharmacyLocations(): Promise<PharmacyLocation[]> {
   );
 }
 
+export interface RecallDetail {
+  recall_number: string;
+  product_ndc: string;
+  reason_for_recall: string;
+  classification: string;
+  severity: string;
+  recalling_firm: string;
+  source_url: string;
+}
+
+/** Single recall's details (for the patient survey page). */
+export async function recallByNumber(
+  recallNumber: string,
+): Promise<RecallDetail | null> {
+  const [r] = await rows<RecallDetail>(
+    `
+    SELECT recall_number, product_ndc, reason_for_recall, classification,
+           severity, recalling_firm, source_url
+    FROM ${DB}.fda_recalls
+    WHERE recall_number = {recall:String}
+    LIMIT 1
+  `,
+    { recall: recallNumber },
+  );
+  return r ?? null;
+}
+
+export interface AffectedContext {
+  pharmacy_id: string;
+  state: string;
+}
+
+/**
+ * Pick a representative affected pharmacy/state for a recall, used to attach a
+ * demo patient's feedback. (No PII — only pharmacy + state.)
+ */
+export async function sampleAffectedContext(
+  recallNumber: string,
+): Promise<AffectedContext | null> {
+  const [r] = await rows<AffectedContext>(
+    `
+    SELECT pharmacy_id, state
+    FROM ${DB}.patient_alerts
+    WHERE recall_number = {recall:String}
+    ORDER BY rand()
+    LIMIT 1
+  `,
+    { recall: recallNumber },
+  );
+  return r ?? null;
+}
+
+export interface FeedbackAggregate {
+  total: number;
+  adverse: number;
+  adverseRate: number; // 0..1
+  bySeverity: Record<"None" | "Mild" | "Moderate" | "Severe", number>;
+}
+
+/** Aggregated outcome feedback for a recall — the view the FDA acts on. */
+export async function feedbackAggregate(
+  recallNumber: string,
+): Promise<FeedbackAggregate> {
+  const data = await rows<{ symptom_severity: string; n: string; adverse: string }>(
+    `
+    SELECT symptom_severity, count() AS n, sum(adverse) AS adverse
+    FROM ${DB}.patient_feedback
+    WHERE recall_number = {recall:String}
+    GROUP BY symptom_severity
+  `,
+    { recall: recallNumber },
+  );
+  const bySeverity = { None: 0, Mild: 0, Moderate: 0, Severe: 0 };
+  let total = 0;
+  let adverse = 0;
+  for (const d of data) {
+    const n = Number(d.n);
+    total += n;
+    adverse += Number(d.adverse);
+    if (d.symptom_severity in bySeverity) {
+      bySeverity[d.symptom_severity as keyof typeof bySeverity] = n;
+    }
+  }
+  return {
+    total,
+    adverse,
+    adverseRate: total > 0 ? adverse / total : 0,
+    bySeverity,
+  };
+}
+
+export interface FeedbackEntry {
+  patient_ref: string;
+  state: string;
+  channel: string;
+  symptom_severity: string;
+  adverse: number;
+  symptoms_text: string;
+  last_consumed: string;
+  dose_amount: string;
+  created_at: string;
+}
+
+/** Recent de-identified feedback entries for a recall. */
+export async function recentFeedback(
+  recallNumber: string,
+  limit = 20,
+): Promise<FeedbackEntry[]> {
+  const data = await rows<FeedbackEntry & { adverse: string }>(
+    `
+    SELECT patient_ref, state, channel, symptom_severity, adverse,
+           symptoms_text, last_consumed, dose_amount,
+           toString(created_at) AS created_at
+    FROM ${DB}.patient_feedback
+    WHERE recall_number = {recall:String}
+    ORDER BY created_at DESC
+    LIMIT {limit:UInt32}
+  `,
+    { recall: recallNumber, limit },
+  );
+  return data.map((d) => ({ ...d, adverse: Number(d.adverse) }));
+}
+
+export interface NetworkFeedbackEntry extends FeedbackEntry {
+  recall_number: string;
+}
+
+/**
+ * Most recent de-identified check-ins across ALL recalls — a network-wide view
+ * so the demo never looks empty if a patient responds to a different recall than
+ * the one currently on screen. Each entry carries its own recall_number.
+ */
+export async function latestFeedbackGlobal(
+  limit = 8,
+): Promise<NetworkFeedbackEntry[]> {
+  const data = await rows<NetworkFeedbackEntry & { adverse: string }>(
+    `
+    SELECT recall_number, patient_ref, state, channel, symptom_severity, adverse,
+           symptoms_text, last_consumed, dose_amount,
+           toString(created_at) AS created_at
+    FROM ${DB}.patient_feedback
+    ORDER BY created_at DESC
+    LIMIT {limit:UInt32}
+  `,
+    { limit },
+  );
+  return data.map((d) => ({ ...d, adverse: Number(d.adverse) }));
+}
+
+export interface PharmacyTask {
+  task_id: string;
+  pharmacy_id: string;
+  patient_ref: string;
+  state: string;
+  priority: string;
+  reason: string;
+  status: string;
+  created_at: string;
+  recall_number?: string;
+}
+
+/** Pharmacy action queue for a recall (urgent first). */
+export async function pharmacyTasks(
+  recallNumber: string,
+  limit = 20,
+): Promise<PharmacyTask[]> {
+  return rows<PharmacyTask>(
+    `
+    SELECT task_id, pharmacy_id, patient_ref, state, priority, reason, status,
+           toString(created_at) AS created_at
+    FROM ${DB}.pharmacy_tasks
+    WHERE recall_number = {recall:String}
+    ORDER BY priority = 'urgent' DESC, created_at DESC
+    LIMIT {limit:UInt32}
+  `,
+    { recall: recallNumber, limit },
+  );
+}
+
+/** Pharmacy action queue across ALL recalls (urgent first) — network-wide view. */
+export async function pharmacyTasksGlobal(limit = 20): Promise<PharmacyTask[]> {
+  return rows<PharmacyTask>(
+    `
+    SELECT task_id, recall_number, pharmacy_id, patient_ref, state, priority,
+           reason, status, toString(created_at) AS created_at
+    FROM ${DB}.pharmacy_tasks
+    ORDER BY priority = 'urgent' DESC, created_at DESC
+    LIMIT {limit:UInt32}
+  `,
+    { limit },
+  );
+}
+
+/** Aggregated outcome feedback across ALL recalls — network-wide signal. */
+export async function feedbackAggregateGlobal(): Promise<FeedbackAggregate> {
+  const data = await rows<{ symptom_severity: string; n: string; adverse: string }>(
+    `
+    SELECT symptom_severity, count() AS n, sum(adverse) AS adverse
+    FROM ${DB}.patient_feedback
+    GROUP BY symptom_severity
+  `,
+  );
+  const bySeverity = { None: 0, Mild: 0, Moderate: 0, Severe: 0 };
+  let total = 0;
+  let adverse = 0;
+  for (const d of data) {
+    const n = Number(d.n);
+    total += n;
+    adverse += Number(d.adverse);
+    if (d.symptom_severity in bySeverity) {
+      bySeverity[d.symptom_severity as keyof typeof bySeverity] = n;
+    }
+  }
+  return {
+    total,
+    adverse,
+    adverseRate: total > 0 ? adverse / total : 0,
+    bySeverity,
+  };
+}
+
 export interface NetworkPoint {
   pharmacy_id: string;
   lat: number;

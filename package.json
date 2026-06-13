@@ -11,7 +11,9 @@
     "db:verify": "tsx scripts/verify.ts",
     "ingest": "tsx scripts/ingest.ts",
     "classify": "tsx scripts/classify.ts",
-    "run-defense": "tsx scripts/run.ts"
+    "run-defense": "tsx scripts/run.ts",
+    "triage": "tsx scripts/triage.ts",
+    "feedback-check": "tsx scripts/feedback.ts"
   },
   "dependencies": {
     "@clickhouse/client": "^1.20.0",

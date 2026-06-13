@@ -8,6 +8,7 @@ import {
   affectedPharmacyPoints,
 } from "@/lib/queries";
 import { buildMessage, dispatchToCohort } from "@/lib/dispatch";
+import { careNetworkSummary } from "@/lib/care";
 import { sendDemoAlert } from "@/lib/alert";
 import { generatePatientCard } from "@/lib/card";
 import { cite } from "@/lib/audit";
@@ -105,9 +106,13 @@ export const runDefense = inngest.createFunction(
       const message = buildMessage(sev.severity, r.recalling_firm, r.product_ndc);
       await emit("msg", "message_drafted", { severity: sev.severity, message });
 
-      const dispatch = await step.run(`${p}-dispatch`, () =>
-        dispatchToCohort(r.recall_number),
-      );
+      const dispatch = await step.run(`${p}-dispatch`, async () => {
+        const [d, care] = await Promise.all([
+          dispatchToCohort(r.recall_number),
+          careNetworkSummary(r.recall_number),
+        ]);
+        return { ...d, care };
+      });
       // Fire ONE real alert only for the headline recall (keeps the demo clean).
       const demoAlert =
         i === 0
@@ -125,6 +130,9 @@ export const runDefense = inngest.createFunction(
         dispatched: dispatch.dispatched,
         pharmacies: dispatch.pharmacies,
         states: dispatch.states,
+        providers: dispatch.care.providers,
+        payers: dispatch.care.payers,
+        payerNames: dispatch.care.payerNames,
         demoAlert,
       });
 
