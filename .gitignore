@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# local git history backup (contains pre-redaction secrets; do not commit)
+/.git-backup/
+
 # local clickhouse data + large seed CSVs
 /.clickhouse/
 /data/*.csv

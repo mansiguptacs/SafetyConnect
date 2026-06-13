@@ -201,6 +201,19 @@ export async function affectedPharmacyPoints(
   return data.map((d) => ({ ...d, customers: Number(d.customers) }));
 }
 
+export interface PharmacyLocation {
+  lat: number;
+  lon: number;
+  state: string;
+}
+
+/** Fast coords-only pharmacy list for the base map layer (no patient join). */
+export async function pharmacyLocations(): Promise<PharmacyLocation[]> {
+  return rows<PharmacyLocation>(
+    `SELECT lat, lon, state FROM ${DB}.pharmacies`,
+  );
+}
+
 export interface NetworkPoint {
   pharmacy_id: string;
   lat: number;
