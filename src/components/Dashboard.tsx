@@ -194,7 +194,7 @@ export default function Dashboard({
 
           <Stepper stages={recall?.stages ?? {}} last={lastStage} accent={accent} />
 
-          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.45fr_1fr]">
+          <div className="animate-rise mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.45fr_1fr]">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-3 flex items-baseline justify-between">
                 <h2 className="text-sm font-semibold text-slate-700">
@@ -270,13 +270,16 @@ function Header({
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-[11px] text-slate-400">
-          {connection === "open"
-            ? "● live"
-            : running
-              ? "○ connecting"
-              : ""}
-        </span>
+        {running && connection !== "open" ? (
+          <span className="text-[11px] text-slate-400">○ connecting…</span>
+        ) : (
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600">
+            <span className="alert-ping relative inline-flex h-2 w-2 text-emerald-500">
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            live
+          </span>
+        )}
         <button
           onClick={onLaunch}
           disabled={launching || running}
@@ -336,7 +339,7 @@ function Stepper({
   accent: string;
 }) {
   return (
-    <div className="mt-5 flex flex-wrap items-center gap-1.5">
+    <div className="animate-rise mt-5 flex flex-wrap items-center gap-1.5">
       {STAGES.map((s, i) => {
         const done = Boolean(stages[s.key]);
         const isLast = s.key === last;
@@ -345,12 +348,16 @@ function Stepper({
             <div
               className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
                 isLast
-                  ? "border-transparent text-white"
+                  ? "border-transparent text-white shadow-sm"
                   : done
                     ? "border-slate-200 bg-white text-slate-700"
                     : "border-slate-100 bg-slate-50 text-slate-300"
               }`}
-              style={isLast ? { background: accent } : undefined}
+              style={
+                isLast
+                  ? { background: accent, boxShadow: `0 0 0 4px ${accent}22` }
+                  : undefined
+              }
             >
               <span
                 className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] ${

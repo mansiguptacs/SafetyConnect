@@ -65,7 +65,7 @@ export default function FeedbackLoop({
   const recentList = isGlobal ? (data?.network ?? []) : (data?.recent ?? []);
 
   return (
-    <div className="mt-6">
+    <div className="animate-rise mt-6">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-700">
           Closing the loop — patient outcomes{" "}

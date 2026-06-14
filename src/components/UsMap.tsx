@@ -106,6 +106,16 @@ export default function UsMap({ base, points, byState, accent }: UsMapProps) {
     [points],
   );
 
+  // Highest-impact pharmacies emit a radiating "alert broadcast" pulse.
+  const topPoints = useMemo(
+    () =>
+      points
+        .map((p, i) => ({ p, i }))
+        .sort((a, b) => (b.p.customers ?? 0) - (a.p.customers ?? 0))
+        .slice(0, 12),
+    [points],
+  );
+
   const [ar, ag, ab] = hexToRgb(accent);
 
   return (
@@ -146,6 +156,41 @@ export default function UsMap({ base, points, byState, accent }: UsMapProps) {
         {basePts.map(([x, y], i) => (
           <circle key={`b${i}`} cx={x} cy={y} r={0.7} fill="#94a3b8" opacity={0.35} />
         ))}
+
+        {/* radiating alert pulses from the highest-impact pharmacies */}
+        {topPoints.map(({ p, i }, k) => {
+          const xy = project(p);
+          if (!xy) return null;
+          const r = 1.8 + 5.5 * Math.sqrt((p.customers ?? 1) / maxPoint);
+          const begin = `${(k % 6) * 0.4}s`;
+          return (
+            <circle
+              key={`ring${i}`}
+              cx={xy[0]}
+              cy={xy[1]}
+              r={r}
+              fill="none"
+              stroke={accent}
+              strokeWidth={1.2}
+              opacity={0}
+            >
+              <animate
+                attributeName="r"
+                values={`${r};${r + 18}`}
+                dur="2.4s"
+                begin={begin}
+                repeatCount="indefinite"
+              />
+              <animate
+                attributeName="opacity"
+                values="0.55;0"
+                dur="2.4s"
+                begin={begin}
+                repeatCount="indefinite"
+              />
+            </circle>
+          );
+        })}
 
         {/* affected pharmacies, sized by reach */}
         {points.map((p, i) => {

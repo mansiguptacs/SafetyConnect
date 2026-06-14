@@ -11,3 +11,60 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* --- On-theme motion --- */
+
+/* Gentle reveal as pipeline stages / panels appear. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise {
+  animation: rise-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Expanding "alert broadcast" ring — used behind live status badges. */
+@keyframes alert-ping {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.55;
+  }
+  80%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.alert-ping::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: alert-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Slow ambient pan for the hero background — like a radar sweep. */
+@keyframes sheen {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .alert-ping::before {
+    animation: none;
+  }
+}
